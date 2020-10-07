@@ -28,6 +28,7 @@ Specifically, in this chapter, you are going to practice:
 As usual, the explanations are in the Haskell comments of this module. We are
 leaving a number of tasks on our path. Your goal is to solve them all.
 
+
 After finishing the PR, you can choose to summon us, @vrom911 and @chshersh, to
 look at your solution in order to give some advice on your code. This is
 optional; however, you can ask us for review only if you want some feedback on
@@ -344,6 +345,15 @@ of a book, but you are not limited only by the book properties we described.
 Create your own book type of your dreams!
 -}
 
+data Book = Book 
+  { bookTitle           :: String
+  , bookPages           :: Int
+  , bookAuthor          :: String
+  , bookLanguage        :: String
+  , bookDimensions      :: (Float, Float, Float)
+  } deriving (Show)
+
+
 {- |
 =⚔️= Task 2
 
@@ -373,6 +383,25 @@ after the fight. The battle has the following possible outcomes:
    doesn't earn any money and keeps what they had before.
 
 -}
+
+data Knight = Knight
+    { knightHealth    :: Int
+    , knightAttack    :: Int
+    , knightGold      :: Int
+    } deriving (Show)
+
+data Monster = Monster
+   {  monsterHealth    :: Int
+    , monsterAttack    :: Int
+    , monsterGold      :: Int
+    } deriving (Show)
+
+fight :: Knight -> Monster -> Int
+fight k m 
+  | knightAttack k >= monsterHealth m = knightGold k + monsterGold m
+  | monsterAttack m >= knightHealth k = -1 
+  | otherwise                         = knightGold k
+
 
 {- |
 =🛡= Sum types
@@ -460,6 +489,20 @@ Create a simple enumeration for the meal types (e.g. breakfast). The one who
 comes up with the most number of names wins the challenge. Use your creativity!
 -}
 
+data MealType
+  = Suhur
+  | Breakfast
+  | Tiffin
+  | Brunch
+  | Elevenses
+  | Lunch
+  | AfternoonTea
+  | HighTea
+  | Dinner
+  | Supper
+  | SiuYeh
+
+
 {- |
 =⚔️= Task 4
 
@@ -479,6 +522,46 @@ After defining the city, implement the following functions:
    complicated task, walls can be built only if the city has a castle
    and at least 10 living __people__ inside in all houses of the city totally.
 -}
+
+data Inhabitants = One | Two | Three | Four deriving (Show)
+inhabitantsToInt :: Inhabitants -> Int
+inhabitantsToInt One   = 1
+inhabitantsToInt Two   = 2
+inhabitantsToInt Three = 3
+inhabitantsToInt Four  = 4
+
+
+data Castle = Castle String deriving (Show)
+data Wall = Wall deriving (Show)
+data CommunityBuilding = Library | Church deriving (Show)
+data House = House {houseInhabitants :: Inhabitants} deriving (Show)
+
+data CityType
+    = WalledCastleCity Castle Wall CommunityBuilding [House]
+    | CastleCity Castle CommunityBuilding [House]
+    | Town CommunityBuilding [House]
+    deriving (Show)
+
+buildCastle :: CityType -> String -> CityType
+buildCastle (WalledCastleCity _ w cb hs) name = WalledCastleCity (Castle name) w cb hs
+buildCastle (CastleCity _ cb hs) name = CastleCity (Castle name) cb hs
+buildCastle (Town c hs) name  = CastleCity (Castle name) c hs
+
+buildHouse :: CityType -> House -> CityType
+buildHouse (WalledCastleCity c w cb hs) house = WalledCastleCity c w cb (house : hs)
+buildHouse (CastleCity c cb hs) house = CastleCity c cb (house : hs)
+buildHouse (Town cb hs) house  = Town cb (house : hs)
+
+buildWalls :: CityType -> CityType
+buildWalls (WalledCastleCity c w cb hs) = WalledCastleCity c w cb hs
+buildWalls (Town cb hs)  = Town cb hs
+buildWalls (CastleCity c cb hs)
+  | sum (map numberInhabitans hs) >= 10 = WalledCastleCity c Wall cb hs
+  | otherwise = CastleCity c cb hs
+  where numberInhabitans :: House -> Int
+        numberInhabitans (House i) = inhabitantsToInt i
+
+
 
 {-
 =🛡= Newtypes
@@ -560,22 +643,34 @@ introducing extra newtypes.
 🕯 HINT: if you complete this task properly, you don't need to change the
     implementation of the "hitPlayer" function at all!
 -}
+
+newtype Health    = MkHealth    { unHealth    :: Int } deriving (Show)
+newtype Armor     = MkArmor     { unArmor     :: Int } deriving (Show)
+newtype Attack    = MkAttack    { unAttack    :: Int } deriving (Show)
+newtype Dexterity = MkDexterity { unDexterity :: Int } deriving (Show)
+newtype Strength  = MkStrength  { unStrength  :: Int } deriving (Show)
+newtype Damage    = MkDamage    { unDamage    :: Int } deriving (Show)
+newtype Defense   = MkDefense   { unDefense   :: Int } deriving (Show)
+
 data Player = Player
-    { playerHealth    :: Int
-    , playerArmor     :: Int
-    , playerAttack    :: Int
-    , playerDexterity :: Int
-    , playerStrength  :: Int
+    { playerHealth    :: Health
+    , playerArmor     :: Armor
+    , playerAttack    :: Attack
+    , playerDexterity :: Dexterity
+    , playerStrength  :: Strength
     }
+    deriving (Show)
 
-calculatePlayerDamage :: Int -> Int -> Int
-calculatePlayerDamage attack strength = attack + strength
+calculatePlayerDamage :: Attack -> Strength -> Damage
+calculatePlayerDamage atk str = MkDamage (unAttack atk + unStrength str)
 
-calculatePlayerDefense :: Int -> Int -> Int
-calculatePlayerDefense armor dexterity = armor * dexterity
+calculatePlayerDefense :: Armor -> Dexterity -> Defense
+calculatePlayerDefense ar dex = MkDefense (unArmor ar * unDexterity dex)
 
-calculatePlayerHit :: Int -> Int -> Int -> Int
-calculatePlayerHit damage defense health = health + defense - damage
+calculatePlayerHit :: Damage -> Defense -> Health -> Health
+calculatePlayerHit dmg def h = MkHealth (unHealth h - inflictedDamagePoints)
+    where inflictedDamagePoints = max (unDamage dmg - unDefense def) 0  
+    -- Player should gain health by beeing attacked with low damage
 
 -- The second player hits first player and the new first player is returned
 hitPlayer :: Player -> Player -> Player

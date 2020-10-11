@@ -384,23 +384,24 @@ after the fight. The battle has the following possible outcomes:
 
 -}
 
-data Knight = Knight
-    { knightHealth    :: Int
-    , knightAttack    :: Int
-    , knightGold      :: Int
+-- Using postfix T to enable defining Knight and Monster in Task 9
+data KnightT = KnightT           
+    { knightTHealth    :: Int
+    , knightTAttack    :: Int
+    , knightTGold      :: Int
     } deriving (Show)
 
-data Monster = Monster
-   {  monsterHealth    :: Int
-    , monsterAttack    :: Int
-    , monsterGold      :: Int
+data MonsterT = MonsterT
+   {  monsterTHealth    :: Int
+    , monsterTAttack    :: Int
+    , monsterTGold      :: Int
     } deriving (Show)
 
-fight :: Knight -> Monster -> Int
-fight k m 
-  | knightAttack k >= monsterHealth m = knightGold k + monsterGold m
-  | monsterAttack m >= knightHealth k = -1 
-  | otherwise                         = knightGold k
+fightT :: KnightT -> MonsterT -> Int
+fightT k m 
+  | knightTAttack k  >= monsterTHealth m = knightTGold k + monsterTGold m
+  | monsterTAttack m >= knightTHealth k  = -1 
+  | otherwise                            = knightTGold k
 
 
 {- |
@@ -848,6 +849,20 @@ parametrise data types in places where values can be of any general type.
   maybe-treasure ;)
 -}
 
+data TreasureChest x = TreasureChest
+    { treasureChestGold :: Int
+    , treasureChestLoot :: x
+    } deriving (Show)
+
+data Dragon x = Dragon { dragonMagic :: x} deriving(Show)
+
+
+data DragonLair magicType lootType = DragonLair
+   { lairDragon :: Dragon magicType 
+   , lairChest  :: (Maybe (TreasureChest lootType))
+   } deriving (Show)
+
+
 {-
 =🛡= Typeclasses
 
@@ -1002,8 +1017,26 @@ Implement instances of "Append" for the following types:
   ✧ *(Challenge): "Maybe" where append is appending of values inside "Just" constructors
 
 -}
+
+newtype Gold   = MkGold   { unGold   :: Int } deriving (Show)
+
 class Append a where
     append :: a -> a -> a
+
+instance Append Gold where
+    append :: Gold  -> Gold -> Gold
+    append a b = MkGold (unGold a + unGold b)
+
+instance Append [a] where
+    append :: [a]  -> [a] -> [a]
+    append l1 l2 = l1 ++ l2
+
+instance (Append a) => Append (Maybe a) where
+    append :: Maybe a -> Maybe a -> Maybe a
+    append Nothing b = b
+    append a Nothing = a
+    append (Just a) (Just b) = Just (append a b)
+
 
 
 {-
@@ -1066,6 +1099,28 @@ implement the following functions:
 🕯 HINT: to implement this task, derive some standard typeclasses
 -}
 
+data Weekday = Monday 
+             | Tuesday 
+             | Wednesday 
+             | Thursday 
+             | Friday 
+             | Saturday 
+             | Sunday  deriving (Show, Read, Eq, Ord, Enum)
+
+isWeekend :: Weekday -> Bool
+isWeekend Saturday = True
+isWeekend Sunday   = True
+isWeekend _        = False
+
+nextDay :: Weekday -> Weekday
+nextDay Sunday = Monday
+nextDay day = succ day
+
+daysToParty :: Weekday -> Int
+daysToParty day =  (fromEnum Friday - fromEnum day + numDays) `mod` numDays
+    where numDays = length (enumFrom Monday) 
+
+
 {-
 =💣= Task 9*
 
@@ -1101,6 +1156,129 @@ Implement data types and typeclasses, describing such a battle between two
 contestants, and write a function that decides the outcome of a fight!
 -}
 
+
+data FightResult = FirstFighterFled 
+                 | SecondFighterFled
+                 | FirstFighterDefeated
+                 | SecondFighterDefeated
+                 | Draw
+                deriving Show
+
+data Knight = Knight
+    { knightHealth    :: Health
+    , knightAttack    :: Attack
+    , knightDefense   :: Defense
+    }  -- TODO: FightingKnight (maxHealth::Health + roundsBoostedDefense :: Int)
+    deriving (Show)
+
+attackKnight :: Knight -> (Knight, Attack)
+attackKnight k = (k, knightAttack k)
+-- Attack and Defense Spel lshould be limited to max health and boosted defense going down
+usePotionKnight :: Knight -> (Knight, Attack)
+usePotionKnight (Knight (MkHealth h) atk def) = (Knight (MkHealth (h + 10)) atk def , MkAttack 0)
+
+castDefSpellKnight :: Knight -> (Knight, Attack)
+castDefSpellKnight (Knight h atk (MkDefense def)) = (Knight h atk (MkDefense (def + 10)), MkAttack 0)
+
+
+data Monster = Monster
+    { monsterHealth    :: Health
+    , monsterAttack   :: Attack
+    }  | FledMonster
+    deriving (Show)
+
+fleeMonster :: Monster -> (Monster, Attack)
+fleeMonster _ = (FledMonster, MkAttack 0)
+
+attackMonster :: Monster -> (Monster,Attack)
+attackMonster m = (m, monsterAttack m)
+
+
+class Fighter a where
+    takeDamage :: a -> Attack -> a
+    defeated   :: a -> Bool
+    fled       :: a -> Bool
+
+instance Fighter Knight where
+    takeDamage :: Knight -> Attack -> Knight
+    takeDamage (Knight  h atk def) attack = Knight remainingHealth atk def
+        where effectiveDmg = max (unAttack attack - unDefense def) 0
+              remainingHealth = MkHealth (max (unHealth h - effectiveDmg) 0) 
+   
+    defeated :: Knight -> Bool
+    defeated k = unHealth (knightHealth k) <= 0
+    
+    fled :: Knight -> Bool
+    fled _ = False
+
+
+instance Fighter Monster where
+    takeDamage :: Monster -> Attack -> Monster
+    takeDamage (Monster h a) (MkAttack atk) = Monster remainingHealth a
+                where remainingHealth = MkHealth (max (unHealth h - atk) 0)
+    
+    defeated :: Monster -> Bool
+    defeated m = unHealth (monsterHealth m) <= 0
+
+        
+    fled :: Monster -> Bool
+    fled FledMonster = True
+    fled _ = False
+
+rotateOne :: [a] -> [a]
+rotateOne l = take (length l) (drop 1 (cycle l))
+
+fight :: (Fighter a, Fighter b) =>  a -> [a -> (a, Attack)] -> b -> [b -> (b, Attack)] -> FightResult
+fight fighter1 actions1 fighter2 actions2 = go fighter1 actions1 fighter2 actions2 0
+  where 
+  go :: (Fighter a, Fighter b) =>  a -> [a -> (a, Attack)] -> b -> [b -> (b, Attack)] -> Int -> FightResult
+  go fighter1 actions1 fighter2 actions2 round 
+      | (length actions1) == 0  = FirstFighterDefeated
+      | (length actions2) == 0  = SecondFighterDefeated
+      | fled fighter1         = FirstFighterFled
+      | fled fighter2         = SecondFighterFled
+      | defeated fighter1     = FirstFighterDefeated
+      | defeated fighter2     = SecondFighterDefeated
+      | round > 100           = Draw --round limit (no infinte fights)
+      | round `mod` 2 == 0    = go attakingFighter1 newActions1 defendingFighter2 actions2 (round + 1) 
+      | otherwise             = go defendingFighter1 actions1 attakingFighter2 newActions2 (round + 1) 
+          where action1 : _ = actions1
+                newActions1 = rotateOne actions1
+                (attakingFighter1, damage1) = action1 fighter1
+                defendingFighter2 = takeDamage fighter2 damage1
+                action2 : _ = actions2
+                newActions2 = rotateOne actions2
+                (attakingFighter2, damage2) = action2 fighter2
+                defendingFighter1 = takeDamage fighter1 damage2
+  
+
+k = Knight (MkHealth 100) (MkAttack 7) (MkDefense 10)
+m = Monster (MkHealth 200) (MkAttack 15)
+
+{- 
+@
+fight k [attackKnight] m [attackMonster, attackMonster, fleeMonster] 
+> SecondFighterFled
+
+fight k [attackKnight] m [attackMonster]
+> FirstFighterDefeated
+
+fight k [attackKnight,attackKnight,usePotionKnight] m [attackMonster]
+> SecondFighterDefeated
+
+fight k [castDefSpellKnight, attackKnight, attackKnight, attackKnight] m [attackMonster] 
+> SecondFighterDefeated
+
+fight m [attackMonster]  m [attackMonster]
+> SecondFighterDefeated
+
+fight k [] m [fleeMonster]
+> FirstFighterDefeated
+
+fight k [attackKnight] k [attackKnight]
+> Draw
+@
+-}
 
 {-
 You did it! Now it is time to the open pull request with your changes

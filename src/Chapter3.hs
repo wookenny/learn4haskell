@@ -1216,7 +1216,7 @@ class Fighter a where
 instance Fighter Knight where
     takeDamage :: Knight -> Attack -> Knight
     takeDamage (Knight  h atk def) a =  takeDamage (FightingKnight h h atk def 0)  a
-    takeDamage (FightingKnight  h maxH atk def boostDef) attack = FightingKnight remainingHealth maxH atk def (boostDef-1)
+    takeDamage (FightingKnight  h maxH atk def boostDef) attack = FightingKnight remainingHealth maxH atk def (max (boostDef-1) 0)
               where reductionFactor = if boostDef > 0 then 2 else 1
                     effectiveDmg = max (unAttack attack - (unDefense def) * reductionFactor) 0
                     remainingHealth = MkHealth (max (unHealth h - effectiveDmg) 0)

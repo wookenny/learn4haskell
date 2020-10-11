@@ -1168,17 +1168,31 @@ data Knight = Knight
     { knightHealth    :: Health
     , knightAttack    :: Attack
     , knightDefense   :: Defense
-    }  -- TODO: FightingKnight (maxHealth::Health + roundsBoostedDefense :: Int)
+    } | FightingKnight 
+    { fknightHealth               :: Health
+    , fknightMaxHealth            :: Health
+    , fknightAttack               :: Attack
+    , fknightDefense              :: Defense
+    , fknightRoundsBoostedDefense :: Int
+    }
     deriving (Show)
 
-attackKnight :: Knight -> (Knight, Attack)
-attackKnight k = (k, knightAttack k)
--- Attack and Defense Spel lshould be limited to max health and boosted defense going down
-usePotionKnight :: Knight -> (Knight, Attack)
-usePotionKnight (Knight (MkHealth h) atk def) = (Knight (MkHealth (h + 10)) atk def , MkAttack 0)
+noAttack = MkAttack 0
 
-castDefSpellKnight :: Knight -> (Knight, Attack)
-castDefSpellKnight (Knight h atk (MkDefense def)) = (Knight h atk (MkDefense (def + 10)), MkAttack 0)
+attackKnight :: Knight -> (Knight, Attack)
+attackKnight k = case k of
+    FightingKnight _ _ atk _ _  -> (k, atk)
+    Knight _ atk _              -> (k, atk)
+
+usePotionKnight :: Knight -> (Knight, Attack) 
+usePotionKnight (Knight  h atk def) = (FightingKnight h h atk def 0, noAttack) 
+usePotionKnight (FightingKnight h maxH atk def boostDef) = (newKnight, noAttack)
+      where newHealth = max (unHealth h + 10) (unHealth maxH)
+            newKnight = FightingKnight (MkHealth newHealth) maxH atk def boostDef
+
+castDefSpellKnight :: Knight -> (Knight, Attack) 
+castDefSpellKnight (Knight  h atk def) = (FightingKnight h h atk def 3,  noAttack) 
+castDefSpellKnight (FightingKnight h hMax atk def _) = (FightingKnight h hMax atk def 3, noAttack)
 
 
 data Monster = Monster
@@ -1201,13 +1215,17 @@ class Fighter a where
 
 instance Fighter Knight where
     takeDamage :: Knight -> Attack -> Knight
-    takeDamage (Knight  h atk def) attack = Knight remainingHealth atk def
-        where effectiveDmg = max (unAttack attack - unDefense def) 0
-              remainingHealth = MkHealth (max (unHealth h - effectiveDmg) 0) 
-   
+    takeDamage (Knight  h atk def) a =  takeDamage (FightingKnight h h atk def 0)  a
+    takeDamage (FightingKnight  h maxH atk def boostDef) attack = FightingKnight remainingHealth maxH atk def (boostDef-1)
+              where reductionFactor = if boostDef > 0 then 2 else 1
+                    effectiveDmg = max (unAttack attack - (unDefense def) * reductionFactor) 0
+                    remainingHealth = MkHealth (max (unHealth h - effectiveDmg) 0)
+
+
     defeated :: Knight -> Bool
-    defeated k = unHealth (knightHealth k) <= 0
-    
+    defeated (Knight h _ _) = unHealth h <= 0
+    defeated (FightingKnight h _ _ _ _) = unHealth h <= 0
+
     fled :: Knight -> Bool
     fled _ = False
 
@@ -1239,7 +1257,7 @@ fight fighter1 actions1 fighter2 actions2 = go fighter1 actions1 fighter2 action
       | fled fighter2         = SecondFighterFled
       | defeated fighter1     = FirstFighterDefeated
       | defeated fighter2     = SecondFighterDefeated
-      | round > 100           = Draw --round limit (no infinte fights)
+      | round > 100           = Draw --round limit (no infinte fights), fighters are too tired to continue ;)
       | round `mod` 2 == 0    = go attakingFighter1 newActions1 defendingFighter2 actions2 (round + 1) 
       | otherwise             = go defendingFighter1 actions1 attakingFighter2 newActions2 (round + 1) 
           where action1 : _ = actions1

@@ -1251,8 +1251,8 @@ fight fighter1 actions1 fighter2 actions2 = go fighter1 actions1 fighter2 action
   where 
   go :: (Fighter a, Fighter b) =>  a -> [a -> (a, Attack)] -> b -> [b -> (b, Attack)] -> Int -> FightResult
   go fighter1 actions1 fighter2 actions2 round 
-      | (length actions1) == 0  = FirstFighterDefeated
-      | (length actions2) == 0  = SecondFighterDefeated
+      | null actions1 = FirstFighterDefeated
+      | null actions2 = SecondFighterDefeated
       | fled fighter1         = FirstFighterFled
       | fled fighter2         = SecondFighterFled
       | defeated fighter1     = FirstFighterDefeated

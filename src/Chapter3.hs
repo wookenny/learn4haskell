@@ -28,6 +28,7 @@ Specifically, in this chapter, you are going to practice:
 As usual, the explanations are in the Haskell comments of this module. We are
 leaving a number of tasks on our path. Your goal is to solve them all.
 
+
 After finishing the PR, you can choose to summon us, @vrom911 and @chshersh, to
 look at your solution in order to give some advice on your code. This is
 optional; however, you can ask us for review only if you want some feedback on
@@ -344,6 +345,15 @@ of a book, but you are not limited only by the book properties we described.
 Create your own book type of your dreams!
 -}
 
+data Book = Book 
+  { bookTitle           :: String
+  , bookPages           :: Int
+  , bookAuthor          :: String
+  , bookLanguage        :: String
+  , bookDimensions      :: (Float, Float, Float)
+  } deriving (Show)
+
+
 {- |
 =⚔️= Task 2
 
@@ -373,6 +383,26 @@ after the fight. The battle has the following possible outcomes:
    doesn't earn any money and keeps what they had before.
 
 -}
+
+-- Using postfix T to enable defining Knight and Monster in Task 9
+data KnightT = KnightT           
+    { knightTHealth    :: Int
+    , knightTAttack    :: Int
+    , knightTGold      :: Int
+    } deriving (Show)
+
+data MonsterT = MonsterT
+   {  monsterTHealth    :: Int
+    , monsterTAttack    :: Int
+    , monsterTGold      :: Int
+    } deriving (Show)
+
+fightT :: KnightT -> MonsterT -> Int
+fightT k m 
+  | knightTAttack k  >= monsterTHealth m = knightTGold k + monsterTGold m
+  | monsterTAttack m >= knightTHealth k  = -1 
+  | otherwise                            = knightTGold k
+
 
 {- |
 =🛡= Sum types
@@ -460,6 +490,20 @@ Create a simple enumeration for the meal types (e.g. breakfast). The one who
 comes up with the most number of names wins the challenge. Use your creativity!
 -}
 
+data MealType
+  = Suhur
+  | Breakfast
+  | Tiffin
+  | Brunch
+  | Elevenses
+  | Lunch
+  | AfternoonTea
+  | HighTea
+  | Dinner
+  | Supper
+  | SiuYeh
+
+
 {- |
 =⚔️= Task 4
 
@@ -479,6 +523,46 @@ After defining the city, implement the following functions:
    complicated task, walls can be built only if the city has a castle
    and at least 10 living __people__ inside in all houses of the city totally.
 -}
+
+data Inhabitants = One | Two | Three | Four deriving (Show)
+inhabitantsToInt :: Inhabitants -> Int
+inhabitantsToInt One   = 1
+inhabitantsToInt Two   = 2
+inhabitantsToInt Three = 3
+inhabitantsToInt Four  = 4
+
+
+data Castle = Castle String deriving (Show)
+data Wall = Wall deriving (Show)
+data CommunityBuilding = Library | Church deriving (Show)
+data House = House {houseInhabitants :: Inhabitants} deriving (Show)
+
+data CityType
+    = WalledCastleCity Castle Wall CommunityBuilding [House]
+    | CastleCity Castle CommunityBuilding [House]
+    | Town CommunityBuilding [House]
+    deriving (Show)
+
+buildCastle :: CityType -> String -> CityType
+buildCastle (WalledCastleCity _ w cb hs) name = WalledCastleCity (Castle name) w cb hs
+buildCastle (CastleCity _ cb hs) name = CastleCity (Castle name) cb hs
+buildCastle (Town c hs) name  = CastleCity (Castle name) c hs
+
+buildHouse :: CityType -> House -> CityType
+buildHouse (WalledCastleCity c w cb hs) house = WalledCastleCity c w cb (house : hs)
+buildHouse (CastleCity c cb hs) house = CastleCity c cb (house : hs)
+buildHouse (Town cb hs) house  = Town cb (house : hs)
+
+buildWalls :: CityType -> CityType
+buildWalls (WalledCastleCity c w cb hs) = WalledCastleCity c w cb hs
+buildWalls (Town cb hs)  = Town cb hs
+buildWalls (CastleCity c cb hs)
+  | sum (map numberInhabitans hs) >= 10 = WalledCastleCity c Wall cb hs
+  | otherwise = CastleCity c cb hs
+  where numberInhabitans :: House -> Int
+        numberInhabitans (House i) = inhabitantsToInt i
+
+
 
 {-
 =🛡= Newtypes
@@ -560,22 +644,34 @@ introducing extra newtypes.
 🕯 HINT: if you complete this task properly, you don't need to change the
     implementation of the "hitPlayer" function at all!
 -}
+
+newtype Health    = MkHealth    { unHealth    :: Int } deriving (Show)
+newtype Armor     = MkArmor     { unArmor     :: Int } deriving (Show)
+newtype Attack    = MkAttack    { unAttack    :: Int } deriving (Show)
+newtype Dexterity = MkDexterity { unDexterity :: Int } deriving (Show)
+newtype Strength  = MkStrength  { unStrength  :: Int } deriving (Show)
+newtype Damage    = MkDamage    { unDamage    :: Int } deriving (Show)
+newtype Defense   = MkDefense   { unDefense   :: Int } deriving (Show)
+
 data Player = Player
-    { playerHealth    :: Int
-    , playerArmor     :: Int
-    , playerAttack    :: Int
-    , playerDexterity :: Int
-    , playerStrength  :: Int
+    { playerHealth    :: Health
+    , playerArmor     :: Armor
+    , playerAttack    :: Attack
+    , playerDexterity :: Dexterity
+    , playerStrength  :: Strength
     }
+    deriving (Show)
 
-calculatePlayerDamage :: Int -> Int -> Int
-calculatePlayerDamage attack strength = attack + strength
+calculatePlayerDamage :: Attack -> Strength -> Damage
+calculatePlayerDamage atk str = MkDamage (unAttack atk + unStrength str)
 
-calculatePlayerDefense :: Int -> Int -> Int
-calculatePlayerDefense armor dexterity = armor * dexterity
+calculatePlayerDefense :: Armor -> Dexterity -> Defense
+calculatePlayerDefense ar dex = MkDefense (unArmor ar * unDexterity dex)
 
-calculatePlayerHit :: Int -> Int -> Int -> Int
-calculatePlayerHit damage defense health = health + defense - damage
+calculatePlayerHit :: Damage -> Defense -> Health -> Health
+calculatePlayerHit dmg def h = MkHealth (unHealth h - inflictedDamagePoints)
+    where inflictedDamagePoints = max (unDamage dmg - unDefense def) 0  
+    -- Player should gain health by beeing attacked with low damage
 
 -- The second player hits first player and the new first player is returned
 hitPlayer :: Player -> Player -> Player
@@ -753,6 +849,20 @@ parametrise data types in places where values can be of any general type.
   maybe-treasure ;)
 -}
 
+data TreasureChest x = TreasureChest
+    { treasureChestGold :: Int
+    , treasureChestLoot :: x
+    } deriving (Show)
+
+data Dragon x = Dragon { dragonMagic :: x} deriving(Show)
+
+
+data DragonLair magicType lootType = DragonLair
+   { lairDragon :: Dragon magicType 
+   , lairChest  :: (Maybe (TreasureChest lootType))
+   } deriving (Show)
+
+
 {-
 =🛡= Typeclasses
 
@@ -907,8 +1017,26 @@ Implement instances of "Append" for the following types:
   ✧ *(Challenge): "Maybe" where append is appending of values inside "Just" constructors
 
 -}
+
+newtype Gold   = MkGold   { unGold   :: Int } deriving (Show)
+
 class Append a where
     append :: a -> a -> a
+
+instance Append Gold where
+    append :: Gold  -> Gold -> Gold
+    append a b = MkGold (unGold a + unGold b)
+
+instance Append [a] where
+    append :: [a]  -> [a] -> [a]
+    append = (++)
+
+instance (Append a) => Append (Maybe a) where
+    append :: Maybe a -> Maybe a -> Maybe a
+    append Nothing b = b
+    append a Nothing = a
+    append (Just a) (Just b) = Just (append a b)
+
 
 
 {-
@@ -971,6 +1099,28 @@ implement the following functions:
 🕯 HINT: to implement this task, derive some standard typeclasses
 -}
 
+data Weekday = Monday 
+             | Tuesday 
+             | Wednesday 
+             | Thursday 
+             | Friday 
+             | Saturday 
+             | Sunday  deriving (Show, Read, Eq, Ord, Enum)
+
+isWeekend :: Weekday -> Bool
+isWeekend Saturday = True
+isWeekend Sunday   = True
+isWeekend _        = False
+
+nextDay :: Weekday -> Weekday
+nextDay Sunday = Monday
+nextDay day = succ day
+
+daysToParty :: Weekday -> Int
+daysToParty day =  (fromEnum Friday - fromEnum day + numDays) `mod` numDays
+    where numDays = length [mibBound .. maxBound] 
+
+
 {-
 =💣= Task 9*
 
@@ -1006,6 +1156,147 @@ Implement data types and typeclasses, describing such a battle between two
 contestants, and write a function that decides the outcome of a fight!
 -}
 
+
+data FightResult = FirstFighterFled 
+                 | SecondFighterFled
+                 | FirstFighterDefeated
+                 | SecondFighterDefeated
+                 | Draw
+                deriving Show
+
+data Knight = Knight
+    { knightHealth    :: Health
+    , knightAttack    :: Attack
+    , knightDefense   :: Defense
+    } | FightingKnight 
+    { fknightHealth               :: Health
+    , fknightMaxHealth            :: Health
+    , fknightAttack               :: Attack
+    , fknightDefense              :: Defense
+    , fknightRoundsBoostedDefense :: Int
+    }
+    deriving (Show)
+
+noAttack = MkAttack 0
+
+attackKnight :: Knight -> (Knight, Attack)
+attackKnight k = case k of
+    FightingKnight _ _ atk _ _  -> (k, atk)
+    Knight _ atk _              -> (k, atk)
+
+usePotionKnight :: Knight -> (Knight, Attack) 
+usePotionKnight (Knight  h atk def) = (FightingKnight h h atk def 0, noAttack) 
+usePotionKnight (FightingKnight h maxH atk def boostDef) = (newKnight, noAttack)
+      where newHealth = max (unHealth h + 10) (unHealth maxH)
+            newKnight = FightingKnight (MkHealth newHealth) maxH atk def boostDef
+
+castDefSpellKnight :: Knight -> (Knight, Attack) 
+castDefSpellKnight (Knight  h atk def) = (FightingKnight h h atk def 3,  noAttack) 
+castDefSpellKnight (FightingKnight h hMax atk def _) = (FightingKnight h hMax atk def 3, noAttack)
+
+
+data Monster = Monster
+    { monsterHealth    :: Health
+    , monsterAttack   :: Attack
+    }  | FledMonster
+    deriving (Show)
+
+fleeMonster :: Monster -> (Monster, Attack)
+fleeMonster _ = (FledMonster, MkAttack 0)
+
+attackMonster :: Monster -> (Monster,Attack)
+attackMonster m = (m, monsterAttack m)
+
+
+class Fighter a where
+    takeDamage :: a -> Attack -> a
+    defeated   :: a -> Bool
+    fled       :: a -> Bool
+
+instance Fighter Knight where
+    takeDamage :: Knight -> Attack -> Knight
+    takeDamage (Knight  h atk def) a =  takeDamage (FightingKnight h h atk def 0)  a
+    takeDamage (FightingKnight  h maxH atk def boostDef) attack = FightingKnight remainingHealth maxH atk def (max (boostDef-1) 0)
+              where reductionFactor = if boostDef > 0 then 2 else 1
+                    effectiveDmg = max (unAttack attack - (unDefense def) * reductionFactor) 0
+                    remainingHealth = MkHealth (max (unHealth h - effectiveDmg) 0)
+
+
+    defeated :: Knight -> Bool
+    defeated (Knight h _ _) = unHealth h <= 0
+    defeated (FightingKnight h _ _ _ _) = unHealth h <= 0
+
+    fled :: Knight -> Bool
+    fled _ = False
+
+
+instance Fighter Monster where
+    takeDamage :: Monster -> Attack -> Monster
+    takeDamage (Monster h a) (MkAttack atk) = Monster remainingHealth a
+                where remainingHealth = MkHealth (max (unHealth h - atk) 0)
+    
+    defeated :: Monster -> Bool
+    defeated m = unHealth (monsterHealth m) <= 0
+
+        
+    fled :: Monster -> Bool
+    fled FledMonster = True
+    fled _ = False
+
+rotateOne :: [a] -> [a]
+rotateOne l = drop 1 l ++ take 1 l
+
+fight :: (Fighter a, Fighter b) =>  a -> [a -> (a, Attack)] -> b -> [b -> (b, Attack)] -> FightResult
+fight fighter1 actions1 fighter2 actions2 = go fighter1 actions1 fighter2 actions2 0
+  where 
+  go :: (Fighter a, Fighter b) =>  a -> [a -> (a, Attack)] -> b -> [b -> (b, Attack)] -> Int -> FightResult
+  go fighter1 actions1 fighter2 actions2 round 
+      | null actions1 = FirstFighterDefeated
+      | null actions2 = SecondFighterDefeated
+      | fled fighter1         = FirstFighterFled
+      | fled fighter2         = SecondFighterFled
+      | defeated fighter1     = FirstFighterDefeated
+      | defeated fighter2     = SecondFighterDefeated
+      | round > 100           = Draw --round limit (no infinte fights), fighters are too tired to continue ;)
+      | round `mod` 2 == 0    = go attakingFighter1 newActions1 defendingFighter2 actions2 (round + 1) 
+      | otherwise             = go defendingFighter1 actions1 attakingFighter2 newActions2 (round + 1) 
+          where action1 : _ = actions1
+                newActions1 = rotateOne actions1
+                (attakingFighter1, damage1) = action1 fighter1
+                defendingFighter2 = takeDamage fighter2 damage1
+                action2 : _ = actions2
+                newActions2 = rotateOne actions2
+                (attakingFighter2, damage2) = action2 fighter2
+                defendingFighter1 = takeDamage fighter1 damage2
+  
+
+k = Knight (MkHealth 100) (MkAttack 7) (MkDefense 10)
+m = Monster (MkHealth 200) (MkAttack 15)
+
+{- 
+@
+fight k [attackKnight] m [attackMonster, attackMonster, fleeMonster] 
+> SecondFighterFled
+
+fight k [attackKnight] m [attackMonster]
+> FirstFighterDefeated
+
+fight k [attackKnight,attackKnight,usePotionKnight] m [attackMonster]
+> SecondFighterDefeated
+
+fight k [castDefSpellKnight, attackKnight, attackKnight, attackKnight] m [attackMonster] 
+> SecondFighterDefeated
+
+fight m [attackMonster]  m [attackMonster]
+> SecondFighterDefeated
+
+fight k [] m [fleeMonster]
+> FirstFighterDefeated
+
+fight k [attackKnight] k [attackKnight]
+> Draw
+@
+-}
 
 {-
 You did it! Now it is time to the open pull request with your changes

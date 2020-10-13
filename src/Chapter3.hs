@@ -1244,7 +1244,7 @@ instance Fighter Monster where
     fled _ = False
 
 rotateOne :: [a] -> [a]
-rotateOne l = take (length l) (drop 1 (cycle l))
+rotateOne l = drop 1 l ++ take 1 l
 
 fight :: (Fighter a, Fighter b) =>  a -> [a -> (a, Attack)] -> b -> [b -> (b, Attack)] -> FightResult
 fight fighter1 actions1 fighter2 actions2 = go fighter1 actions1 fighter2 actions2 0

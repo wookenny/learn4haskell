@@ -114,23 +114,23 @@ As always, try to guess the output first! And don't forget to insert
 the output in here:
 
 >>> :k Char
-
+Char :: *
 >>> :k Bool
-
+Bool :: *
 >>> :k [Int]
-
+[Int] :: *
 >>> :k []
-
+[] :: * -> *
 >>> :k (->)
-
+(->) :: * -> * -> *
 >>> :k Either
-
+Either :: * -> * -> *
 >>> data Trinity a b c = MkTrinity a b c
 >>> :k Trinity
-
+Trinity :: * -> * -> * -> *
 >>> data IntBox f = MkIntBox (f Int)
 >>> :k IntBox
-
+IntBox :: (* -> *) -> *
 -}
 
 {- |
@@ -293,7 +293,8 @@ values and apply them to the type level?
 -}
 instance Functor (Secret e) where
     fmap :: (a -> b) -> Secret e a -> Secret e b
-    fmap = error "fmap for Box: not implemented!"
+    fmap f (Reward a) = Reward (f a)
+    fmap _ (Trap t) = (Trap t)
 
 {- |
 =⚔️= Task 3
@@ -305,7 +306,13 @@ typeclasses for standard data types.
 -}
 data List a
     = Empty
-    | Cons a (List a)
+    | Cons a (List a) 
+  deriving (Show)
+
+instance Functor List where
+    fmap :: (a -> b) -> List a -> List b
+    fmap f (Cons a l) = Cons (f a) (fmap f l)
+    fmap _ Empty = Empty
 
 {- |
 =🛡= Applicative
@@ -472,10 +479,11 @@ Implement the Applicative instance for our 'Secret' data type from before.
 -}
 instance Applicative (Secret e) where
     pure :: a -> Secret e a
-    pure = error "pure Secret: Not implemented!"
+    pure = Reward
 
     (<*>) :: Secret e (a -> b) -> Secret e a -> Secret e b
-    (<*>) = error "(<*>) Secret: Not implemented!"
+    Trap t   <*> _      = Trap t
+    Reward f <*> secret = fmap f secret
 
 {- |
 =⚔️= Task 5
@@ -489,6 +497,18 @@ Implement the 'Applicative' instance for our 'List' type.
   type.
 -}
 
+concatLists :: List a -> List a -> List a
+concatLists Empty l = l
+concatLists (Cons x xs) l = Cons x (concatLists xs l)
+
+
+instance Applicative List where
+  pure :: a -> List a
+  pure a = Cons a Empty
+
+  (<*>) :: List (a -> b) -> List a -> List b
+  Empty       <*> _ = Empty
+  Cons f fs   <*> l = concatLists (fmap f l) (fs <*> l)
 
 {- |
 =🛡= Monad
@@ -600,7 +620,8 @@ Implement the 'Monad' instance for our 'Secret' type.
 -}
 instance Monad (Secret e) where
     (>>=) :: Secret e a -> (a -> Secret e b) -> Secret e b
-    (>>=) = error "bind Secret: Not implemented!"
+    Trap t >>= _ = Trap t
+    Reward r >>= f = f r
 
 {- |
 =⚔️= Task 7
@@ -610,6 +631,16 @@ Implement the 'Monad' instance for our lists.
 🕯 HINT: You probably will need to implement a helper function (or
   maybe a few) to flatten lists of lists to a single list.
 -}
+
+flatten :: List (List a) -> List a
+flatten Empty = Empty
+flatten (Cons l ls) = concatLists (l) (flatten ls)
+
+instance Monad List where
+    (>>=) :: List a -> (a -> List b) -> List b
+    Empty >>= _ = Empty
+    l >>= f = flatten (pure f <*> l)
+    -- Cons a tail >>= f = concatLists (f a) (tail >>= f)   --alternative implementation without flatten
 
 
 {- |
@@ -629,7 +660,13 @@ Can you implement a monad version of AND, polymorphic over any monad?
 🕯 HINT: Use "(>>=)", "pure" and anonymous function
 -}
 andM :: (Monad m) => m Bool -> m Bool -> m Bool
-andM = error "andM: Not implemented!"
+andM m1 m2 = m1 >>= (\b1 -> (m2 >>= (\b2 -> pure (b1 && b2))))
+{- Fails for `andM (Just False) Nothing`
+      expected: Just False
+      but got: Nothing
+
+      Why is `Just False` expected but for `andM (Just True) Nothing` the result should be `Nothing`?
+-}
 
 {- |
 =🐉= Task 9*: Final Dungeon Boss
@@ -673,7 +710,28 @@ Specifically,
  ❃ Implement the function to convert Tree to list
 -}
 
+--"full binary tree" implementation → nodes have two or no child nodes
+data Tree a
+    = Leaf a 
+    | Node a (Tree a) (Tree a)
+      deriving (Show)
 
+instance Functor Tree where 
+  fmap :: (a -> b) -> Tree a -> Tree b
+  fmap f (Leaf a) = Leaf (f a)
+  fmap f (Node a left right) = Node (f a) (fmap f left) (fmap f right)
+
+reverseTree :: Tree a -> Tree a
+reverseTree (Leaf a) = Leaf a
+reverseTree (Node a left right) = Node a (reverseTree right) (reverseTree left)
+
+toList :: Tree a -> [a]
+toList (Leaf a) = [a]
+toList (Node a left right) = (toList left) ++ [a] ++ (toList right)
+
+--t = Node 0 (Leaf 3) (Node 8 (Leaf 5) (Node 2 (Leaf 1) (Leaf 7)))
+-- reverse (toList t) == toList (reverseTree t)
+-- > True
 {-
 You did it! Now it is time to the open pull request with your changes
 and summon @vrom911 and @chshersh for the review!

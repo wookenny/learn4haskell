@@ -1118,7 +1118,7 @@ nextDay day = succ day
 
 daysToParty :: Weekday -> Int
 daysToParty day =  (fromEnum Friday - fromEnum day + numDays) `mod` numDays
-    where numDays = length [mibBound .. maxBound] 
+    where numDays = length [Monday .. Sunday] 
 
 
 {-

@@ -497,9 +497,10 @@ Implement the 'Applicative' instance for our 'List' type.
   type.
 -}
 
-concatLists :: List a -> List a -> List a
-concatLists Empty l = l
-concatLists (Cons x xs) l = Cons x (concatLists xs l)
+append :: List a -> List a -> List a
+append Empty l = l
+append l Empty = l
+append (Cons x xs) l = Cons x (append xs l)
 
 
 instance Applicative List where
@@ -507,8 +508,9 @@ instance Applicative List where
   pure a = Cons a Empty
 
   (<*>) :: List (a -> b) -> List a -> List b
-  Empty       <*> _ = Empty
-  Cons f fs   <*> l = concatLists (fmap f l) (fs <*> l)
+  Empty       <*> _     = Empty
+  _           <*> Empty = Empty
+  Cons f fs   <*> l = append (fmap f l) (fs <*> l)
 
 {- |
 =🛡= Monad
@@ -634,14 +636,12 @@ Implement the 'Monad' instance for our lists.
 
 flatten :: List (List a) -> List a
 flatten Empty = Empty
-flatten (Cons l ls) = concatLists (l) (flatten ls)
+flatten (Cons l ls) = append (l) (flatten ls)
 
 instance Monad List where
     (>>=) :: List a -> (a -> List b) -> List b
     Empty >>= _ = Empty
-    l >>= f = flatten (pure f <*> l)
-    -- Cons a tail >>= f = concatLists (f a) (tail >>= f)   --alternative implementation without flatten
-
+    l >>= f = flatten (fmap f l)
 
 {- |
 =💣= Task 8*: Before the Final Boss
@@ -660,7 +660,7 @@ Can you implement a monad version of AND, polymorphic over any monad?
 🕯 HINT: Use "(>>=)", "pure" and anonymous function
 -}
 andM :: (Monad m) => m Bool -> m Bool -> m Bool
-andM m1 m2 = m1 >>= (\b1 -> (m2 >>= (\b2 -> pure (b1 && b2))))
+andM m1 m2 = m1 >>= (\b1 -> if b1 then m2 else m1)
 {- Fails for `andM (Just False) Nothing`
       expected: Just False
       but got: Nothing
@@ -727,7 +727,7 @@ reverseTree (Node a left right) = Node a (reverseTree right) (reverseTree left)
 
 toList :: Tree a -> [a]
 toList (Leaf a) = [a]
-toList (Node a left right) = (toList left) ++ [a] ++ (toList right)
+toList (Node a left right) = (toList left) ++ a : (toList right)
 
 --t = Node 0 (Leaf 3) (Node 8 (Leaf 5) (Node 2 (Leaf 1) (Leaf 7)))
 -- reverse (toList t) == toList (reverseTree t)
